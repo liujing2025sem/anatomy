@@ -26,6 +26,8 @@ once, without guessing a language or falling back to English. It populates the
 HTML track and JSON sidecars, not the video's spoken-language metadata.
 Manifest reads and generated text files use UTF-8 explicitly. Caption text stays
 literal in WebVTT, including angle brackets and entity-like text such as `&amp;`.
+The CLI writes ASCII-escaped JSON to stdout, so Unicode paths survive JSON
+decoding even on an ASCII console. Generated text files remain UTF-8.
 
 `mode=fixture` requires `synthetic=true`. `mode=approved_sample` requires complete
 G1/G2 declarations and an approved asset-scope declaration. These are declaration

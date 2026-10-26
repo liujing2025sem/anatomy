@@ -195,7 +195,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try:
         result = build(args.manifest, args.out)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(result, ensure_ascii=True, indent=2))
         raise SystemExit(0 if result['status'] == 'PASS_TECHNICAL_ONLY' else 1)
     except FileExistsError:
         print('BLOCKED: output directory already exists; inspect previous receipt, then choose a new directory')

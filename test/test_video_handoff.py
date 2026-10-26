@@ -312,5 +312,41 @@ class HandoffTests(unittest.TestCase):
                     self.assertEqual(timeline['caption_track']['label'], '简体中文')
 
 
+    def test_cli_receipt_json_on_ascii_stdout_with_unicode_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / '中文路径'
+            folder.mkdir()
+            self.data['media']['path'] = str(self.media)
+            self.data['caption_track'] = {'language': 'zh-CN', 'label': '简体中文'}
+            self.data['captions'][0]['text'] = '中文校准字幕'
+            env = dict(os.environ, PYTHONIOENCODING='ascii', PYTHONUTF8='1')
+            child = ('import runpy, sys; assert sys.stdout.encoding.lower() == "ascii"; '
+                     'cli = sys.argv.pop(1); sys.argv[0] = cli; '
+                     'runpy.run_path(cli, run_name="__main__")')
+            for valid in (True, False):
+                with self.subTest(valid_media_hash=valid):
+                    data = copy.deepcopy(self.data)
+                    if not valid:
+                        data['media']['sha256'] = '0' * 64
+                    source = folder / f'输入-{valid}.json'
+                    source.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+                    out = folder / f'输出-{valid}'
+                    result = subprocess.run([sys.executable, '-c', child,
+                                             str(ROOT / 'handoff.py'), str(source), '--out', str(out)],
+                                            env=env, capture_output=True, timeout=30)
+                    saved = json.loads((out / 'recovery-receipt.json').read_text(encoding='utf-8'))
+                    self.assertEqual(saved['status'], 'PASS_TECHNICAL_ONLY' if valid else 'BLOCKED')
+                    self.assertEqual(result.returncode, 0 if valid else 1,
+                                     f"saved_status={saved['status']}; " + result.stderr.decode('utf-8', errors='replace'))
+                    console = json.loads(result.stdout.decode('ascii'))
+                    self.assertEqual(console, saved)
+                    self.assertEqual(console['source_manifest'], str(source.resolve()))
+                    self.assertFalse(console['publication_authorized'])
+                    if valid:
+                        self.assertIn('中文校准字幕', (out / 'captions.vtt').read_text(encoding='utf-8'))
+                    else:
+                        self.assertIn('SHA256 mismatch', console['error'])
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
