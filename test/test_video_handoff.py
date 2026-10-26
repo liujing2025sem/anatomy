@@ -72,6 +72,20 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(groups[0]['original_urls'], self.data['original_urls'][:2])
         self.assertTrue(all(g['decision'].startswith('HOLD') for g in groups))
 
+    def test_repeated_functional_parameter_order_survives_tracking_removal(self):
+        urls = [
+            'https://example.org/sample?filter=crop&filter=scale&utm_source=first',
+            'https://example.org/sample?filter=scale&filter=crop&utm_source=second',
+            'https://example.org/sample?utm_medium=email&filter=crop&utm_campaign=test&filter=scale#top',
+            'https://example.org/sample?filter=scale&utm_medium=email&filter=crop',
+        ]
+        groups = h.url_groups(urls)
+        self.assertEqual(len(groups), 2)
+        self.assertEqual(groups[0]['original_urls'], [urls[0], urls[2]])
+        self.assertEqual(groups[1]['original_urls'], [urls[1], urls[3]])
+        self.assertEqual(groups[0]['normalized_url'], 'https://example.org/sample?filter=crop&filter=scale')
+        self.assertEqual(groups[1]['normalized_url'], 'https://example.org/sample?filter=scale&filter=crop')
+
     def test_shots_cannot_hide_a_timeline_gap(self):
         self.data['shots'][1]['start_ms'] = 2100
         with self.assertRaisesRegex(ValueError, 'continuously'):

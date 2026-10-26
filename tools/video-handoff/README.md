@@ -43,5 +43,7 @@ and captions.vtt beside report.html when serving it through your usual local HTT
 workflow. Metadata remains a candidate sidecar; it does not deploy live JSON-LD.
 URL grouping preserves originals and functional query variants, removes common
 tracking parameters and fragments, and leaves page reuse decisions for review.
+Functional parameter order is preserved, including repeated keys. Reordered
+functional queries are conservatively kept in separate groups.
 
 This adapter is independent of the drawing kit and does not change the examples.

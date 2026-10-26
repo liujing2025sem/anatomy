@@ -38,7 +38,7 @@ def url_groups(urls):
             if not k.lower().startswith('utm_') and k.lower() not in ('gclid', 'fbclid'):
                 query.append((k, v))
         key = urlunsplit((p.scheme.lower(), p.netloc.lower(), p.path or '/',
-                          urlencode(sorted(query)), ''))
+                          urlencode(query), ''))
         groups.setdefault(key, []).append(original)
     return [{'normalized_url': k, 'original_urls': v,
              'decision': 'HOLD: inspect the current page before choosing reuse or a new URL'}
