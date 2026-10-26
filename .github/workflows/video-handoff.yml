@@ -1,0 +1,59 @@
+name: Video handoff tests
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - tools/video-handoff/handoff.py
+      - tools/video-handoff/README.md
+      - test/test_video_handoff.py
+      - test/.gitignore
+      - .github/workflows/video-handoff.yml
+  push:
+    branches: [main]
+    paths:
+      - tools/video-handoff/handoff.py
+      - tools/video-handoff/README.md
+      - test/test_video_handoff.py
+      - test/.gitignore
+      - .github/workflows/video-handoff.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: video-handoff-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  video-handoff:
+    name: Local-media integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout the exact tested head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /tools/video-handoff/handoff.py
+            /tools/video-handoff/README.md
+            /test/test_video_handoff.py
+            /test/.gitignore
+      - name: Install the Ubuntu FFmpeg package
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+      - name: Verify runtime and checked-out head
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python3 -c "import sys; assert sys.version_info >= (3, 11); print(sys.version)"
+          command -v ffmpeg
+          command -v ffprobe
+      - name: Run video handoff integration tests
+        run: python3 -m unittest discover -s test -p 'test_video_handoff.py' -v
