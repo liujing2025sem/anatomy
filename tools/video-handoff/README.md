@@ -47,3 +47,13 @@ Functional parameter order is preserved, including repeated keys. Reordered
 functional queries are conservatively kept in separate groups.
 
 This adapter is independent of the drawing kit and does not change the examples.
+
+The `Video handoff tests` workflow runs this same test file on relevant pull
+requests to main and relevant pushes to main. It checks out the exact PR head
+(or push SHA), limits checkout to the four tool/test files, installs FFmpeg from
+Ubuntu's package repositories and uses Python 3.11+ on a standard Ubuntu runner.
+It has read-only repository contents access, does not persist Git credentials,
+and uses no custom secrets, paid runner, package service or manual dispatch.
+The workflow file itself is also a trigger path. A local test pass or an empty
+checks list is not a remote CI pass; review the run for the actual head before
+considering a merge.
