@@ -1,6 +1,10 @@
 import copy
+import html
 import importlib.util
 import json
+import os
+import shutil
+import sys
 import tempfile
 import subprocess
 import unittest
@@ -53,14 +57,14 @@ class HandoffTests(unittest.TestCase):
             'original_urls': ['https://example.org/sample?utm_source=test#t=2',
                               'https://example.org/sample',
                               'https://example.org/sample?variant=2']
-        }))
+        }), encoding='utf-8')
 
     @classmethod
     def tearDownClass(cls):
         cls.fixture_dir.cleanup()
 
     def setUp(self):
-        self.data = json.loads(self.manifest.read_text())
+        self.data = json.loads(self.manifest.read_text(encoding='utf-8'))
 
     def test_original_url_dedup_preserves_variants_and_inputs(self):
         groups = h.validate(self.data)
@@ -112,7 +116,7 @@ class HandoffTests(unittest.TestCase):
             source = Path(tmp) / 'input.json'
             self.data['media']['path'] = str(self.media)
             self.data['media']['sha256'] = '0' * 64
-            source.write_text(json.dumps(self.data))
+            source.write_text(json.dumps(self.data), encoding='utf-8')
             result = h.build(source, Path(tmp) / 'out')
             self.assertEqual(result['status'], 'BLOCKED')
             self.assertIn('SHA256 mismatch', result['error'])
@@ -124,10 +128,10 @@ class HandoffTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / 'out'
             out.mkdir()
-            (out / 'recovery-receipt.json').write_text('preserve original receipt')
+            (out / 'recovery-receipt.json').write_text('preserve original receipt', encoding='utf-8')
             with self.assertRaises(FileExistsError):
                 h.build(self.manifest, out)
-            self.assertEqual((out / 'recovery-receipt.json').read_text(), 'preserve original receipt')
+            self.assertEqual((out / 'recovery-receipt.json').read_text(encoding='utf-8'), 'preserve original receipt')
 
     def test_real_decode_and_packaged_transcript_do_not_claim_playback(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,16 +139,16 @@ class HandoffTests(unittest.TestCase):
             result = h.build(self.manifest, out)
             self.assertEqual(result['status'], 'PASS_TECHNICAL_ONLY', result)
             self.assertFalse(result['business_video'])
-            qa = json.loads((out / 'playback-check.json').read_text())
+            qa = json.loads((out / 'playback-check.json').read_text(encoding='utf-8'))
             self.assertEqual(qa['decode'], 'PASS')
             self.assertTrue(qa['has_audio'])
             self.assertEqual(qa['browser_play_seek'], 'NOT_TESTED')
-            page = (out / 'report.html').read_text()
+            page = (out / 'report.html').read_text(encoding='utf-8')
             for text in ('SYNTHETIC INTRO', 'SYNTHETIC MIDDLE', 'SYNTHETIC END', 'not a production video'):
                 self.assertIn(text, page)
-            vtt = (out / 'captions.vtt').read_text()
+            vtt = (out / 'captions.vtt').read_text(encoding='utf-8')
             self.assertIn('00:00:04.250 --> 00:00:06.000', vtt)
-            metadata = json.loads((out / 'metadata-candidate.json').read_text())
+            metadata = json.loads((out / 'metadata-candidate.json').read_text(encoding='utf-8'))
             self.assertFalse(metadata['publish_ready'])
             parser = TrackParser()
             parser.feed(page)
@@ -173,19 +177,19 @@ class HandoffTests(unittest.TestCase):
             self.data['captions'][0]['text'] = '合成校准字幕，仅供测试'
             self.data['media']['path'] = str(self.media)
             source = Path(tmp) / 'input.json'
-            source.write_text(json.dumps(self.data, ensure_ascii=False))
+            source.write_text(json.dumps(self.data, ensure_ascii=False), encoding='utf-8')
             out = Path(tmp) / 'out'
             result = h.build(source, out)
             self.assertEqual(result['status'], 'PASS_TECHNICAL_ONLY', result)
             parser = TrackParser()
-            parser.feed((out / 'report.html').read_text())
+            parser.feed((out / 'report.html').read_text(encoding='utf-8'))
             self.assertEqual(parser.tracks[0]['srclang'], 'zh-CN')
             self.assertEqual(parser.tracks[0]['label'], '简体中文')
-            self.assertIn('合成校准字幕，仅供测试', (out / 'captions.vtt').read_text())
+            self.assertIn('合成校准字幕，仅供测试', (out / 'captions.vtt').read_text(encoding='utf-8'))
             for name in ('timeline.json', 'metadata-candidate.json'):
-                exported = json.loads((out / name).read_text())
+                exported = json.loads((out / name).read_text(encoding='utf-8'))
                 self.assertEqual(exported['caption_track'], self.data['caption_track'])
-            self.assertNotIn('inLanguage', json.loads((out / 'metadata-candidate.json').read_text())['VideoObject_candidate'])
+            self.assertNotIn('inLanguage', json.loads((out / 'metadata-candidate.json').read_text(encoding='utf-8'))['VideoObject_candidate'])
 
     def test_gate_declarations_do_not_become_release_permission(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -196,13 +200,13 @@ class HandoffTests(unittest.TestCase):
             self.data['asset_scope'] = {'status': 'approved', 'evidence': 'synthetic declaration only'}
             self.data['media']['path'] = str(self.media)
             source = Path(tmp) / 'input.json'
-            source.write_text(json.dumps(self.data))
+            source.write_text(json.dumps(self.data), encoding='utf-8')
             out = Path(tmp) / 'out'
             result = h.build(source, out)
             self.assertEqual(result['status'], 'PASS_TECHNICAL_ONLY', result)
             self.assertEqual(result['approval_verification'], 'INPUT_DECLARATIONS_ONLY')
             self.assertFalse(result['publication_authorized'])
-            page = (out / 'report.html').read_text()
+            page = (out / 'report.html').read_text(encoding='utf-8')
             self.assertIn('Owner verification still required', page)
             self.assertIn('This result grants no publication permission', page)
             self.assertNotIn('approved materials preflight', page)
@@ -212,10 +216,10 @@ class HandoffTests(unittest.TestCase):
             self.data['title'] = '<script>alert(1)</script>'
             self.data['media']['path'] = str(self.media)
             source = Path(tmp) / 'input.json'
-            source.write_text(json.dumps(self.data))
+            source.write_text(json.dumps(self.data), encoding='utf-8')
             result = h.build(source, Path(tmp) / 'out')
             self.assertEqual(result['status'], 'PASS_TECHNICAL_ONLY')
-            page = (Path(tmp) / 'out/report.html').read_text()
+            page = (Path(tmp) / 'out/report.html').read_text(encoding='utf-8')
             self.assertNotIn('<script>', page)
             self.assertIn('&lt;script&gt;', page)
 
@@ -224,10 +228,74 @@ class HandoffTests(unittest.TestCase):
             self.data['audio']['kind'] = 'silent'
             self.data['media']['path'] = str(self.media)
             source = Path(tmp) / 'input.json'
-            source.write_text(json.dumps(self.data))
+            source.write_text(json.dumps(self.data), encoding='utf-8')
             result = h.build(source, Path(tmp) / 'out')
             self.assertEqual(result['status'], 'BLOCKED')
             self.assertIn('Audio declaration', result['error'])
+
+    def test_vtt_preserves_literal_caption_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            literal = 'Use <placeholder> &amp; "literal" text'
+            self.data['captions'][0]['text'] = literal
+            self.data['media']['path'] = str(self.media)
+            source = Path(tmp) / 'input.json'
+            source.write_text(json.dumps(self.data), encoding='utf-8')
+            out = Path(tmp) / 'out'
+            self.assertEqual(h.build(source, out)['status'], 'PASS_TECHNICAL_ONLY')
+            cue = (out / 'captions.vtt').read_text(encoding='utf-8').splitlines()[3]
+            self.assertNotIn('<placeholder>', cue)
+            self.assertEqual(html.unescape(cue), literal)
+            self.assertIn('&amp;amp;', cue)
+            metadata = json.loads((out / 'metadata-candidate.json').read_text(encoding='utf-8'))
+            self.assertEqual(metadata['VideoObject_candidate']['transcript'].splitlines()[0], literal)
+
+    def test_packaged_manifest_can_be_moved_and_rerun(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            source_dir = folder / 'source'
+            source_dir.mkdir()
+            shutil.copy2(self.media, source_dir / 'original.mp4')
+            self.data['media']['path'] = 'original.mp4'
+            source = source_dir / 'input.json'
+            source.write_text(json.dumps(self.data), encoding='utf-8')
+            original = source.read_bytes()
+            first = folder / 'first'
+            self.assertEqual(h.build(source, first)['status'], 'PASS_TECHNICAL_ONLY')
+            moved = folder / 'moved'
+            shutil.move(first, moved)
+            shutil.rmtree(source_dir)
+            copied = json.loads((moved / 'input.json').read_text(encoding='utf-8'))
+            self.assertTrue((moved / copied['media']['path']).is_file())
+            self.assertEqual((moved / 'source-input.json').read_bytes(), original)
+            second = folder / 'second'
+            result = h.build(moved / 'input.json', second)
+            self.assertEqual(result['status'], 'PASS_TECHNICAL_ONLY', result)
+            self.assertEqual(h.digest(second / 'sample.mp4'), self.data['media']['sha256'])
+
+    def test_utf8_files_under_an_ascii_locale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.data['caption_track'] = {'language': 'zh-CN', 'label': '简体中文'}
+            self.data['title'] = '多语言校准'
+            self.data['captions'][0]['text'] = '中文与 café，仅供测试'
+            self.data['media']['path'] = str(self.media)
+            env = dict(os.environ, LC_ALL='C', LANG='C', PYTHONUTF8='0', PYTHONCOERCECLOCALE='0')
+            child = ('import codecs, locale, runpy, sys; '
+                     'assert codecs.lookup(locale.getpreferredencoding(False)).name == "ascii"; '
+                     'cli = sys.argv.pop(1); sys.argv[0] = cli; '
+                     'runpy.run_path(cli, run_name="__main__")')
+            for escaped in (False, True):
+                with self.subTest(ascii_escaped_input=escaped):
+                    source = Path(tmp) / f'input-{escaped}.json'
+                    source.write_text(json.dumps(self.data, ensure_ascii=escaped), encoding='utf-8')
+                    out = Path(tmp) / f'out-{escaped}'
+                    result = subprocess.run([sys.executable, '-X', 'utf8=0', '-c', child,
+                                             str(ROOT / 'handoff.py'), str(source), '--out', str(out)],
+                                            env=env, capture_output=True, timeout=30)
+                    self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8', errors='replace'))
+                    self.assertIn('中文与 café，仅供测试', (out / 'captions.vtt').read_bytes().decode('utf-8'))
+                    self.assertIn('多语言校准', (out / 'report.html').read_bytes().decode('utf-8'))
+                    timeline = json.loads((out / 'timeline.json').read_bytes().decode('utf-8'))
+                    self.assertEqual(timeline['caption_track']['label'], '简体中文')
 
 
 if __name__ == '__main__':

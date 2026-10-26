@@ -24,6 +24,8 @@ Shots must cover the full timeline; caption gaps are allowed, overlap is not.
 `{"language":"zh-CN","label":"简体中文"}`. The entry check validates tag shape
 once, without guessing a language or falling back to English. It populates the
 HTML track and JSON sidecars, not the video's spoken-language metadata.
+Manifest reads and generated text files use UTF-8 explicitly. Caption text stays
+literal in WebVTT, including angle brackets and entity-like text such as `&amp;`.
 
 `mode=fixture` requires `synthetic=true`. `mode=approved_sample` requires complete
 G1/G2 declarations and an approved asset-scope declaration. These are declaration
@@ -33,8 +35,10 @@ grant no publishing permission. Browser play/seek, mobile readability, listening
 scientific facts and indexing remain outside these checks.
 
 Each run requires a new output directory. On failure inspect recovery-receipt.json
-before retrying. The copied input.json preserves the original manifest; reruns
-resolve its media path against the original manifest directory. Keep sample.mp4
+before retrying. `source-input.json` preserves the submitted manifest bytes;
+`input.json` is a runnable copy that references the packaged `sample.mp4`.
+It can be moved with the package and rerun without the original media directory.
+Keep sample.mp4
 and captions.vtt beside report.html when serving it through your usual local HTTP
 workflow. Metadata remains a candidate sidecar; it does not deploy live JSON-LD.
 URL grouping preserves originals and functional query variants, removes common

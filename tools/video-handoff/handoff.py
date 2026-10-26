@@ -21,7 +21,7 @@ def digest(path):
 
 
 def save(path, data):
-    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 
 def url_groups(urls):
@@ -130,18 +130,20 @@ def build(manifest, out):
                'publication_authorized': False}
     try:
         receipt['source_manifest_sha256'] = digest(manifest)
-        data = json.loads(manifest.read_text())
+        data = json.loads(manifest.read_text(encoding='utf-8'))
         groups = validate(data)
         media = (manifest.parent / data['media']['path']).resolve()
         if digest(media) != data['media']['sha256']:
             raise ValueError('Media SHA256 mismatch; stop before decode or packaging')
         qa = probe(media, data['duration_ms'], data['audio'])
         shutil.copy2(media, out / 'sample.mp4')
-        shutil.copy2(manifest, out / 'input.json')
+        shutil.copy2(manifest, out / 'source-input.json')
+        packaged_input = {**data, 'media': {**data['media'], 'path': 'sample.mp4'}}
+        save(out / 'input.json', packaged_input)
         vtt = 'WEBVTT\n\n' + '\n\n'.join(
-            f"{timestamp(c['start_ms'])} --> {timestamp(c['end_ms'])}\n{c['text']}"
+            f"{timestamp(c['start_ms'])} --> {timestamp(c['end_ms'])}\n{html.escape(c['text'], quote=False)}"
             for c in data['captions']) + '\n'
-        (out / 'captions.vtt').write_text(vtt)
+        (out / 'captions.vtt').write_text(vtt, encoding='utf-8')
         transcript = '\n'.join(c['text'] for c in data['captions'])
         metadata = {'publish_ready': False, 'status': 'candidate_only',
                     'caption_track': data['caption_track'],
@@ -171,7 +173,7 @@ def build(manifest, out):
 <h2>Review declarations and recovery</h2><pre>{e(json.dumps(data['gates'], ensure_ascii=False, indent=2))}</pre>
 <p>G1/G2 checks cover input declarations only. The Owner must independently verify actual signoff, artifact hash, revision and scope. This result grants no publication permission.</p>
 <p>Preserve existing review requirements. On failure, inspect recovery-receipt.json before using a new output directory. The project Owner retains acceptance and merge authority.</p></html>'''
-        (out / 'report.html').write_text(page)
+        (out / 'report.html').write_text(page, encoding='utf-8')
         receipt.update(status='PASS_TECHNICAL_ONLY', business_video=False if data['mode'] == 'fixture' else None,
                        source_media_sha256=data['media']['sha256'],
                        next_action='Independent review; browser play/seek and mobile/listen review before any G3 signoff',
